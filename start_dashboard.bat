@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 > nul
 title AgentRCON Standalone Dashboard Launcher
 cd "%~dp0\dashboard"
 if not exist node_modules (

@@ -184,6 +184,11 @@ def search_item_by_name(query):
     if not query:
         return "Query is empty."
     
+    query_clean = query.replace(':', ' ').replace('_', ' ')
+    query_terms = query_clean.split()
+    if not query_terms:
+        return "Query is empty."
+        
     results = []
     jars_to_scan = []
     
@@ -197,6 +202,7 @@ def search_item_by_name(query):
     console.print(f"[bold grey53][*] Scanning {len(jars_to_scan)} jar archives for '{query}'...[/bold grey53]")
     
     for jar_path in jars_to_scan:
+        jar_name_lower = os.path.basename(jar_path).lower()
         try:
             with zipfile.ZipFile(jar_path, 'r') as z:
                 for name in z.namelist():
@@ -205,7 +211,16 @@ def search_item_by_name(query):
                             try:
                                 lang_data = json.loads(z.read(name).decode("utf-8", errors="ignore"))
                                 for key, val in lang_data.items():
-                                    if query in val.lower():
+                                    val_lower = val.lower()
+                                    key_lower = key.lower()
+                                    
+                                    match_all = True
+                                    for term in query_terms:
+                                        if not (term in val_lower or term in key_lower or term in jar_name_lower):
+                                            match_all = False
+                                            break
+                                            
+                                    if match_all:
                                         parts = key.split('.')
                                         if len(parts) >= 3 and parts[0] in ["item", "block", "entity"]:
                                             modid = parts[1]
@@ -221,7 +236,13 @@ def search_item_by_name(query):
             break
             
     if results:
-        return "\n".join(results[:15])
+        seen = set()
+        dedup_results = []
+        for r in results:
+            if r not in seen:
+                seen.add(r)
+                dedup_results.append(r)
+        return "\n".join(dedup_results[:15])
     return f"No items or blocks matching '{query}' found in mod translation files."
 
 def list_installed_mods():
@@ -478,7 +499,8 @@ Available Tools:
 CRITICAL RULES & PROTOCOLS:
 1. ITEM/MOB/BLOCK RESOLUTION PROTOCOL:
    - When a player requests an item, block, or entity, first check the vanilla reference database below.
-   - If it is NOT in the reference database, you MUST assume it is a modded item/entity and call `search_item_by_name` FIRST to find its exact mod ID.
+   - If the player has already provided the exact modded ID (in `modid:item_name` format, e.g. `gofish:slimefish` or `sophisticatedbackpacks:backpack`), you can use it directly in RCON commands.
+   - If it is NOT in the reference database and the player did NOT provide the exact ID, you MUST call `search_item_by_name` FIRST to find its exact mod ID.
    - Do NOT run a `web_search` for item IDs unless both the reference database and `search_item_by_name` fail to return results.
 2. When targeting the player, you MUST use their exact username '{player_name}' in console commands instead of selectors like '@p' or '@s'.
 3. Minecraft 1.20.1 uses curly brace NBT syntax (e.g. `minecraft:diamond_sword{{display:{{Name:'{{"text":"Legendary Sword"}}'}}}}`). Square brackets `[]` are 1.21+ components and will CRASH the server.
