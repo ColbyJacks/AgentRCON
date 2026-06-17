@@ -25,7 +25,7 @@ from rich import box
 server_dir = os.path.dirname(os.path.abspath(__file__))
 for i, arg in enumerate(sys.argv):
     if arg == "--server-dir" and i + 1 < len(sys.argv):
-        server_dir = sys.argv[i+1]
+        server_dir = sys.argv[i+1].strip('"').strip("'")
         break
 
 RCON_PASS = "1234"
@@ -191,23 +191,55 @@ def search_item_by_name(query):
         return "\n".join(results[:15])
     return f"No items or blocks matching '{query}' found in mod translation files."
 
+def list_installed_mods():
+    console.print("[bold grey53][*] Listing installed mods...[/bold grey53]")
+    mods = []
+    if os.path.exists(MODS_DIR):
+        try:
+            for f in os.listdir(MODS_DIR):
+                if f.endswith(".jar"):
+                    jar_path = os.path.join(MODS_DIR, f)
+                    try:
+                        with zipfile.ZipFile(jar_path, 'r') as z:
+                            if "fabric.mod.json" in z.namelist():
+                                mod_info = json.loads(z.read("fabric.mod.json").decode("utf-8", errors="ignore"))
+                                name = mod_info.get("name") or mod_info.get("id") or f.replace(".jar", "")
+                                version = mod_info.get("version", "")
+                                mods.append(f"{name} ({version})" if version else name)
+                            else:
+                                mods.append(f.replace(".jar", ""))
+                    except Exception:
+                        mods.append(f.replace(".jar", ""))
+        except Exception as e:
+            return f"Error listing mods: {e}"
+    if mods:
+        mods.sort()
+        return "\n".join(mods)
+    return "No mods found in the mods directory."
+
 def web_search(query):
     console.print(f"[bold grey53][*] Searching the web for: '{query}'...[/bold grey53]")
     try:
-        url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(query)
+        url = "https://www.mojeek.com/search?q=" + urllib.parse.quote(query)
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=6) as response:
             html = response.read().decode("utf-8", errors="ignore")
             
         results = []
-        snippets = re.findall(r'<a class="result__snippet"[^>]*>(.*?)</a>', html, re.DOTALL)
+        snippets = re.findall(r'<p class="s">(.*?)</p>', html, re.DOTALL)
         
         def clean_html(text):
             text = re.sub(r'<[^>]+>', '', text)
-            text = text.replace("&amp;", "&").replace("&quot;", '"').replace("&lt;", "<").replace("&gt;", ">").replace("&#x27;", "'")
+            html_entities = {
+                "&amp;": "&", "&quot;": '"', "&lt;": "<", "&gt;": ">",
+                "&#39;": "'", "&#x27;": "'", "&#8217;": "'", "&#8216;": "'",
+                "&ldquo;": '"', "&rdquo;": '"', "&ndash;": "-", "&mdash;": "-"
+            }
+            for entity, replacement in html_entities.items():
+                text = text.replace(entity, replacement)
             return text.strip()
             
         for i in range(min(5, len(snippets))):
@@ -288,6 +320,8 @@ def execute_tool(name, args, player_name):
     elif name == "search_item_by_name":
         q = args.get("query", "")
         return search_item_by_name(q)
+    elif name == "list_installed_mods":
+        return list_installed_mods()
     else:
         return f"Unknown tool: {name}"
 
@@ -313,6 +347,8 @@ def start_server():
         )
     except Exception as e:
         console.print(f"[bold red][-] Error starting process: {e}[/bold red]")
+        console.print(f"[bold red][-] server_dir: {repr(server_dir)} (exists: {os.path.exists(server_dir)})[/bold red]")
+        console.print(f"[bold red][-] JAR_NAME: {repr(JAR_NAME)}[/bold red]")
         server_status = "SLEEPING"
 
 def stop_server():
@@ -348,6 +384,7 @@ def handle_agentic_loop(question, player_name="Player", use_web=False):
 
     system_prompt = f"""You are AgentRCON, an autonomous, highly accurate Minecraft 1.20.1 Server Manager AI.
 The player interacting with you is '{player_name}'. You have direct command console control via RCON tools.
+You are also happy to assist with general, non-Minecraft questions by using your general knowledge or the `web_search` tool to look up real-time information.
 
 To accomplish tasks or answer queries, you use a ReAct (Reasoning -> Action -> Observation) loop.
 You must output your thoughts and tool calls in the following exact format:
@@ -367,9 +404,13 @@ Available Tools:
    Arguments: {{"query": "item display name"}}
    Example: <CALL name="search_item_by_name">{{"query": "woodcutter"}}</CALL>
 
-4. `web_search`: Queries the web for item IDs, recipes, or information.
+4. `web_search`: Queries the web for real-world information, recipes, item IDs, or general news.
    Arguments: {{"query": "search term"}}
-   Example: <CALL name="web_search">{{"query": "minecraft 1.20.1 raw iron block ID"}}</CALL>
+   Example: <CALL name="web_search">{{"query": "who won the 2026 nba finals"}}</CALL>
+
+5. `list_installed_mods`: Returns a list of all mods (and their versions) currently installed on the server.
+   Arguments: None
+   Example: <CALL name="list_installed_mods">{{}}</CALL>
 
 IMPORTANT RULES:
 - When targeting the player, you MUST use their exact username '{player_name}' in console commands instead of selectors like '@p' or '@s'.
@@ -500,10 +541,65 @@ def socket_listener_loop():
         else:
             time.sleep(1)
 
+def check_rcon_and_update_status():
+    global server_status, server_process
+    try:
+        # Check if RCON port is open first (fast check)
+        with socket.create_connection(("127.0.0.1", RCON_PORT), timeout=1.0) as s:
+            pass
+        # Try RCON authentication
+        with MCRcon("127.0.0.1", RCON_PASS, port=RCON_PORT) as mcr:
+            # RCON is active! Set status to RUNNING if not already
+            if server_status != "RUNNING":
+                console.print("[bold green][+] Detected Minecraft server is running via RCON connection![/bold green]")
+                server_status = "RUNNING"
+            
+            # If server_process is None or dead, try to attach telemetry
+            if server_process is None or (hasattr(server_process, 'poll') and server_process.poll() is not None):
+                # Search for Java process pid to wrap it
+                for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                    try:
+                        cmdline = proc.info.get('cmdline') or []
+                        if 'java' in proc.info['name'].lower():
+                            if any(JAR_NAME in arg for arg in cmdline):
+                                class DummyProcess:
+                                    def __init__(self, pid):
+                                        self.pid = pid
+                                    def poll(self):
+                                        return None if psutil.pid_exists(self.pid) else 0
+                                    def kill(self):
+                                        try:
+                                            psutil.Process(self.pid).kill()
+                                        except Exception:
+                                            pass
+                                    def wait(self):
+                                        try:
+                                            p = psutil.Process(self.pid)
+                                            p.wait()
+                                        except Exception:
+                                            pass
+                                server_process = DummyProcess(proc.info['pid'])
+                                console.print(f"[bold green][+] Successfully attached telemetry to Java process PID {proc.info['pid']}[/bold green]")
+                                break
+                    except Exception:
+                        pass
+            return True
+    except Exception:
+        # RCON is not active or connection failed
+        return False
+
+def check_if_server_already_running():
+    check_rcon_and_update_status()
+
 def stats_monitoring_loop():
     global server_status, empty_start_time, player_count, online_players_list, server_process
     while True:
-        time.sleep(8)
+        time.sleep(3)  # Check every 3 seconds for fast status updates
+        
+        # If server is in STARTING or SLEEPING state, check if RCON is responsive
+        if server_status in ["STARTING", "SLEEPING"]:
+            check_rcon_and_update_status()
+            
         if server_status == "RUNNING":
             try:
                 with MCRcon("127.0.0.1", RCON_PASS, port=RCON_PORT) as mcr:
@@ -527,7 +623,13 @@ def stats_monitoring_loop():
                 else:
                     empty_start_time = None
             except Exception:
-                pass
+                # If RCON fails when RUNNING, check if server crashed or was manually stopped
+                if not check_rcon_and_update_status():
+                    # RCON is not responsive. Check if the subprocess is dead or gone.
+                    if server_process is None or (hasattr(server_process, 'poll') and server_process.poll() is not None):
+                        console.print("[bold red][-] Minecraft server is no longer active.[/bold red]")
+                        server_status = "SLEEPING"
+                        server_process = None
         elif server_status == "STARTING":
             # Check if subprocess died unexpectedly
             if server_process and server_process.poll() is not None:
@@ -536,18 +638,59 @@ def stats_monitoring_loop():
                 server_status = "SLEEPING"
 
 def watch_logs():
-    if not os.path.exists(LOG_PATH):
-        while not os.path.exists(LOG_PATH):
-            time.sleep(2)
+    global server_status
+    
+    f = None
+    last_position = 0
+    
+    while True:
+        if f is None:
+            if not os.path.exists(LOG_PATH):
+                time.sleep(1)
+                continue
+            try:
+                f = open(LOG_PATH, "r", encoding="utf-8", errors="ignore")
+                # On initial daemon startup, seek to end so we don't parse historical logs
+                f.seek(0, os.SEEK_END)
+                last_position = f.tell()
+            except Exception:
+                time.sleep(1)
+                continue
 
-    with open(LOG_PATH, "r", encoding="utf-8", errors="ignore") as f:
-        f.seek(0, os.SEEK_END)
-        while True:
+        try:
+            # Check if file was truncated or recreated
+            if os.path.exists(LOG_PATH):
+                current_size = os.path.getsize(LOG_PATH)
+                if current_size < last_position:
+                    console.print("[bold cyan][*] Log file truncated or recreated. Reopening...[/bold cyan]")
+                    f.close()
+                    try:
+                        f = open(LOG_PATH, "r", encoding="utf-8", errors="ignore")
+                        last_position = 0
+                    except Exception:
+                        f = None
+                        last_position = 0
+                        time.sleep(1)
+                        continue
+            else:
+                f.close()
+                f = None
+                last_position = 0
+                continue
+
             line = f.readline()
             if not line:
-                time.sleep(0.1)
-                f.seek(f.tell())
+                # We reached EOF. Check if file has grown but Python is caching EOF on Windows
+                if os.path.exists(LOG_PATH):
+                    current_size = os.path.getsize(LOG_PATH)
+                    if current_size > last_position:
+                        f.close()
+                        f = open(LOG_PATH, "r", encoding="utf-8", errors="ignore")
+                        f.seek(last_position)
+                time.sleep(0.2)
                 continue
+                
+            last_position = f.tell()
             
             # Print parsed chat lines nicely to console
             player_name = extract_player_name(line)
@@ -557,7 +700,6 @@ def watch_logs():
                 
             # If server indicates startup completion
             if "Done (" in line and "s)! For help" in line:
-                global server_status
                 server_status = "RUNNING"
                 console.print("[bold green][+] Server is fully loaded and ready![/bold green]")
                 
@@ -582,6 +724,9 @@ def watch_logs():
             elif "!web" in line and player_name:
                 question = line.split("!web")[-1].strip()
                 threading.Thread(target=handle_agentic_loop, args=(question, player_name, True), daemon=True).start()
+        except Exception as e:
+            console.print(f"[bold red][-] Error in log watcher: {e}[/bold red]")
+            time.sleep(1)
 
 def show_dashboard():
     cpu = 0.0
@@ -807,9 +952,7 @@ class AgentRCONAPIHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.wfile.write(b"Not Found")
 
-def run_api_server():
-    server_address = ('127.0.0.1', 8000)
-    httpd = HTTPServer(server_address, AgentRCONAPIHandler)
+def run_api_server(httpd):
     console.print("[bold green][+] AgentRCON HTTP API listening on http://127.0.0.1:8000[/bold green]")
     httpd.serve_forever()
 
@@ -823,11 +966,24 @@ if __name__ == "__main__":
     # Load memory history
     load_memories()
     
+    # Check if server is already running
+    check_if_server_already_running()
+    
     active_model = get_loaded_model()
     if active_model:
         console.print(f"[bold green][+] Connected to Ollama! Active Model: '{active_model}'[/bold green]")
     else:
         console.print(f"[bold red][-] WARNING: Ollama connection failed. Run 'ollama pull {OLLAMA_MODEL}'[/bold red]")
+
+    # Instantiate REST API server (fails early if port is blocked)
+    try:
+        server_address = ('127.0.0.1', 8000)
+        httpd = HTTPServer(server_address, AgentRCONAPIHandler)
+    except OSError as e:
+        console.print(f"[bold red][-] Failed to bind HTTP server to port 8000: {e}[/bold red]")
+        console.print("[bold red][-] AgentRCON HTTP API port is already occupied. Exiting process.[/bold red]")
+        import os
+        os._exit(1)
 
     # Start background threads
     threading.Thread(target=socket_listener_loop, daemon=True).start()
@@ -835,7 +991,7 @@ if __name__ == "__main__":
     threading.Thread(target=watch_logs, daemon=True).start()
     
     # Start REST API server
-    threading.Thread(target=run_api_server, daemon=True).start()
+    threading.Thread(target=run_api_server, args=(httpd,), daemon=True).start()
     
     # Check if we should skip the interactive terminal CLI loop
     if "--no-cli" in sys.argv:

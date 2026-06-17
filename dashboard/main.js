@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 
 let mainWindow;
@@ -46,6 +46,28 @@ function createWindow() {
   });
 }
 
+function freePort8000() {
+  try {
+    console.log("Checking if port 8000 is in use...");
+    if (process.platform === 'win32') {
+      const output = execSync('netstat -ano').toString();
+      const lines = output.split('\n');
+      for (const line of lines) {
+        if (line.includes(':8000') && line.includes('LISTENING')) {
+          const parts = line.trim().split(/\s+/);
+          const pid = parts[parts.length - 1];
+          if (pid && pid !== '0') {
+            console.log(`Port 8000 is held by PID ${pid}. Killing ghost process...`);
+            execSync(`taskkill /pid ${pid} /f /t`);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore error if port is not in use
+  }
+}
+
 function killPythonBackend() {
   if (pythonProcess) {
     console.log("Killing existing Python process tree...");
@@ -63,6 +85,7 @@ function killPythonBackend() {
 }
 
 function startPythonBackend() {
+  freePort8000();
   killPythonBackend();
   
   if (!config.serverDir || !fs.existsSync(config.serverDir)) {
@@ -70,15 +93,27 @@ function startPythonBackend() {
     return;
   }
 
-  const pythonCmd = 'python';
-  const scriptPath = `"${path.join(__dirname, '..', 'AgentRCON.py')}"`;
-  const serverDirArg = `"${config.serverDir}"`;
+  let pythonCmd;
+  let args;
   
-  console.log(`Spawning Python process: ${pythonCmd} ${scriptPath} --no-cli --server-dir ${serverDirArg}`);
+  const serverDirArg = config.serverDir;
+
+  if (app.isPackaged) {
+    // In packaged app, AgentRCON.exe is bundled in the app resources folder
+    pythonCmd = path.join(process.resourcesPath, 'AgentRCON.exe');
+    args = ['--no-cli', '--server-dir', serverDirArg];
+  } else {
+    // In development mode, run using python with script path
+    pythonCmd = 'python';
+    const scriptPath = path.join(__dirname, '..', 'AgentRCON.py');
+    args = ['-u', scriptPath, '--no-cli', '--server-dir', serverDirArg];
+  }
   
-  pythonProcess = spawn(pythonCmd, [scriptPath, '--no-cli', '--server-dir', serverDirArg], {
-    cwd: path.join(__dirname, '..'),
-    shell: true
+  console.log(`Spawning backend: ${pythonCmd} ${args.join(' ')}`);
+  
+  pythonProcess = spawn(pythonCmd, args, {
+    cwd: config.serverDir,
+    shell: false
   });
 
   pythonProcess.stdout.on('data', (data) => {

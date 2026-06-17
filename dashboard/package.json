@@ -4,10 +4,33 @@
   "description": "AgentRCON Electron Desktop Dashboard",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win"
   },
-  "dependencies": {},
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.0",
+    "electron-packager": "^17.1.2"
+  },
+  "build": {
+    "appId": "com.colbyjacks.agentrcon",
+    "win": {
+      "target": "portable",
+      "artifactName": "AgentRCON-Dashboard-Portable.${ext}"
+    },
+    "extraResources": [
+      {
+        "from": "../dist/AgentRCON.exe",
+        "to": "AgentRCON.exe"
+      }
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "style.css"
+    ]
   }
 }
