@@ -16,6 +16,11 @@ const btnStart = document.getElementById('btn-start');
 const btnStop = document.getElementById('btn-stop');
 const btnSleep = document.getElementById('btn-sleep');
 
+const aiModelBadge = document.getElementById('ai-model-badge');
+const aiModelDesc = document.getElementById('ai-model-desc');
+const btnWarmupAi = document.getElementById('btn-warmup-ai');
+
+
 const consoleLog = document.getElementById('console-log');
 const consoleInputForm = document.getElementById('console-input-form');
 const consoleInput = document.getElementById('console-input');
@@ -101,6 +106,27 @@ function updateDashboard() {
       
       uptimeValue.textContent = data.uptime;
       playerCount.textContent = data.player_count;
+      
+      // Update AI model status
+      const modelStatus = data.model_status || 'idle';
+      aiModelBadge.textContent = modelStatus.toUpperCase();
+      
+      if (modelStatus === 'ready') {
+        aiModelBadge.className = 'state-badge running';
+        aiModelDesc.textContent = "AI model loaded in memory and ready for instant responses.";
+        btnWarmupAi.disabled = true;
+        btnWarmupAi.textContent = "AI Initialized";
+      } else if (modelStatus === 'loading') {
+        aiModelBadge.className = 'state-badge starting';
+        aiModelDesc.textContent = "Ollama is currently loading the model into memory...";
+        btnWarmupAi.disabled = true;
+        btnWarmupAi.textContent = "Initializing...";
+      } else {
+        aiModelBadge.className = 'state-badge sleeping';
+        aiModelDesc.textContent = "Model is not loaded. First response will have a cold-start delay.";
+        btnWarmupAi.disabled = false;
+        btnWarmupAi.textContent = "Initialize AI";
+      }
       
       // Update player list
       if (data.online_players.length > 0) {
@@ -424,6 +450,15 @@ btnSleep.addEventListener('click', () => {
     .then(r => console.log(r.message))
     .catch(e => console.error(e));
 });
+
+btnWarmupAi.addEventListener('click', () => {
+  btnWarmupAi.disabled = true;
+  btnWarmupAi.textContent = "Initializing...";
+  window.api.warmupAI()
+    .then(r => console.log(r.message))
+    .catch(e => console.error(e));
+});
+
 
 // Periodic Loops
 updateDashboard();

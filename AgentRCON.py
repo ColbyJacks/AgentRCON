@@ -107,6 +107,9 @@ online_players_list = []
 empty_start_time = None
 idle_time_limit = 300  # 5 minutes auto-sleep
 
+model_loaded_and_ready = False
+model_loading_in_progress = False
+
 def load_memories():
     global player_sessions
     if os.path.exists(MEMORY_PATH):
@@ -142,6 +145,27 @@ def get_loaded_model():
     except Exception:
         pass
     return None
+
+def warmup_model():
+    global model_loaded_and_ready, model_loading_in_progress
+    if model_loaded_and_ready or model_loading_in_progress:
+        return
+    model_loading_in_progress = True
+    console.print("[bold yellow][*] Warming up AI model in background...[/bold yellow]")
+    try:
+        active_model = get_loaded_model() or OLLAMA_MODEL
+        # Send a dummy quick request to load it into memory
+        client.chat.completions.create(
+            model=active_model,
+            messages=[{"role": "user", "content": "warmup"}],
+            max_tokens=1
+        )
+        model_loaded_and_ready = True
+        console.print("[bold green][+] AI model is fully loaded and ready in memory![/bold green]")
+    except Exception as e:
+        console.print(f"[bold red][-] Failed to warm up AI model: {e}[/bold red]")
+    finally:
+        model_loading_in_progress = False
 
 def extract_player_name(line):
     try:
@@ -906,13 +930,20 @@ class AgentRCONAPIHandler(BaseHTTPRequestHandler):
                 s = elapsed % 60
                 uptime = f"{h:02d}:{m:02d}:{s:02d}"
                 
+            model_status = "idle"
+            if model_loaded_and_ready:
+                model_status = "ready"
+            elif model_loading_in_progress:
+                model_status = "loading"
+                
             response_data = {
                 "status": server_status,
                 "cpu": round(cpu, 1),
                 "ram": round(ram, 2),
                 "uptime": uptime,
                 "player_count": player_count,
-                "online_players": online_players_list
+                "online_players": online_players_list,
+                "model_status": model_status
             }
             self.wfile.write(json.dumps(response_data).encode("utf-8"))
             
@@ -988,6 +1019,16 @@ class AgentRCONAPIHandler(BaseHTTPRequestHandler):
             query = data.get("query", "")
             search_resp = search_item_by_name(query)
             self.wfile.write(json.dumps({"results": search_resp}).encode("utf-8"))
+            
+        elif self.path == "/api/warmup":
+            if model_loaded_and_ready:
+                resp = {"success": True, "status": "ready", "message": "AI model is already loaded."}
+            elif model_loading_in_progress:
+                resp = {"success": True, "status": "loading", "message": "AI model is currently loading..."}
+            else:
+                threading.Thread(target=warmup_model, daemon=True).start()
+                resp = {"success": True, "status": "starting", "message": "AI model loading initiated."}
+            self.wfile.write(json.dumps(resp).encode("utf-8"))
         else:
             self.send_response(404)
             self.wfile.write(b"Not Found")
@@ -1032,6 +1073,9 @@ if __name__ == "__main__":
     
     # Start REST API server
     threading.Thread(target=run_api_server, args=(httpd,), daemon=True).start()
+    
+    # Auto warm up model in background on startup
+    threading.Thread(target=warmup_model, daemon=True).start()
     
     # Check if we should skip the interactive terminal CLI loop
     if "--no-cli" in sys.argv:

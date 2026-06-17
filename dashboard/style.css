@@ -839,3 +839,9 @@ body {
   margin-top: 16px;
   font-weight: 500;
 }
+
+.btn-small {
+  padding: 8px 16px;
+  font-size: 12px;
+  border-radius: 6px;
+}

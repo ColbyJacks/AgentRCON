@@ -68,6 +68,20 @@
             </div>
           </div>
 
+          <!-- AI Model State Card -->
+          <div class="card telemetry-card" style="grid-column: span 2; background: linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.5) 100%);">
+            <div class="card-body" style="display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 18px 24px;">
+              <div>
+                <h3 style="margin-bottom: 4px; font-size: 15px; font-weight: 600; color: var(--text-main);">AI Model (Llama Agent)</h3>
+                <p id="ai-model-desc" style="font-size: 13px; color: var(--text-muted); margin: 0;">Checking model status...</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <span id="ai-model-badge" class="state-badge sleeping" style="font-size: 11px; padding: 6px 12px;">UNKNOWN</span>
+                <button id="btn-warmup-ai" class="btn btn-primary btn-small">Initialize AI</button>
+              </div>
+            </div>
+          </div>
+
           <!-- Telemetry Card: CPU -->
           <div class="card telemetry-card">
             <div class="card-body">

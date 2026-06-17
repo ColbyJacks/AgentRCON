@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('api', {
   getStatus: () => fetch('http://127.0.0.1:8000/api/status').then(res => res.json()),
   getLogs: () => fetch('http://127.0.0.1:8000/api/logs').then(res => res.json()),
   getHistory: () => fetch('http://127.0.0.1:8000/api/history').then(res => res.json()),
+  warmupAI: () => fetch('http://127.0.0.1:8000/api/warmup', { method: 'POST' }).then(res => res.json()),
   controlServer: (action) => fetch('http://127.0.0.1:8000/api/control', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
