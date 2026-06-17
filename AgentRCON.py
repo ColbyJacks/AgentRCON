@@ -525,9 +525,16 @@ Your loop structure:
                 model=active_model,
                 messages=messages,
                 temperature=0.2,
-                extra_body={"options": {"num_ctx": 65536}}
+                max_tokens=4096,
+                extra_body={"options": {"num_ctx": 65536, "num_predict": 4096}},
+                stream=True
             )
-            ai_output = response.choices[0].message.content.strip()
+            full_resp = []
+            for chunk in response:
+                content = chunk.choices[0].delta.content
+                if content:
+                    full_resp.append(content)
+            ai_output = "".join(full_resp).strip()
         except Exception as e:
             console.print(f"[bold red][-] Ollama API error: {e}[/bold red]")
             final_reply = "I encountered an API error while processing your request."
@@ -540,6 +547,13 @@ Your loop structure:
         
         if thought_match:
             console.print(Panel(thought_match.group(1).strip(), title="Thought", border_style="yellow"))
+        elif "<THOUGHT>" in ai_output.upper():
+            idx = ai_output.upper().find("<THOUGHT>")
+            thought_text = ai_output[idx + 9:].strip()
+            thought_text = re.sub(r"</THOUGHT>.*$", "", thought_text, flags=re.DOTALL | re.IGNORECASE).strip()
+            thought_text = re.sub(r"<[^>]*$", "", thought_text).strip()
+            if thought_text:
+                console.print(Panel(thought_text, title="Thought (Unfinished)", border_style="yellow"))
             
         history.append({"role": "assistant", "content": ai_output})
         
@@ -559,8 +573,14 @@ Your loop structure:
         else:
             if say_match:
                 final_reply = say_match.group(1).strip()
+            elif "<SAY>" in ai_output.upper():
+                idx = ai_output.upper().find("<SAY>")
+                final_reply = ai_output[idx + 5:].strip()
             else:
                 final_reply = ai_output
+                
+            # Strip trailing incomplete tags (e.g. cut off mid-tag)
+            final_reply = re.sub(r"<[^>]*$", "", final_reply).strip()
             break
             
     if not final_reply:
@@ -570,7 +590,7 @@ Your loop structure:
     
     try:
         with MCRcon("127.0.0.1", RCON_PASS, port=RCON_PORT) as mcr:
-            clean_reply = re.sub(r"<[^>]+>", "", final_reply).strip()
+            clean_reply = re.sub(r"</?(SAY|THOUGHT|CALL|OBSERVATION)\b[^>]*>", "", final_reply, flags=re.IGNORECASE).strip()
             for para in clean_reply.split("\n"):
                 para = para.strip()
                 if para:
