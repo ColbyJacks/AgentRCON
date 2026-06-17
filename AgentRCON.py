@@ -1,5 +1,14 @@
 import os
 import sys
+
+# Configure stdout and stderr to use UTF-8 and replace encoding errors to prevent crashes on Windows console
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
+    except Exception:
+        pass
+
 import re
 import socket
 import subprocess

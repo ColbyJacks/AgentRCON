@@ -113,7 +113,8 @@ function startPythonBackend() {
   
   pythonProcess = spawn(pythonCmd, args, {
     cwd: config.serverDir,
-    shell: false
+    shell: false,
+    env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
   });
 
   pythonProcess.stdout.on('data', (data) => {
