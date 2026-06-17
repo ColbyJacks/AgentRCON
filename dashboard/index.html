@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentRCON Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">🛡️</div>
+        <div class="brand-info">
+          <h1>AgentRCON</h1>
+          <span>v3.0.0</span>
+        </div>
+      </div>
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="status">
+          <span class="nav-icon">📊</span> Dashboard
+        </button>
+        <button class="nav-item" data-tab="console">
+          <span class="nav-icon">💻</span> Live Console
+        </button>
+        <button class="nav-item" data-tab="memories">
+          <span class="nav-icon">🧠</span> Player Memories
+        </button>
+        <button class="nav-item" data-tab="search">
+          <span class="nav-icon">🔍</span> Mod Item Search
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <span class="nav-icon">⚙️</span> Settings
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="api-status">
+          <span class="indicator connected"></span> API Connected
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Tab: Status / Dashboard -->
+      <section id="tab-status" class="tab-panel active">
+        <header class="panel-header">
+          <h2>Server Control & Telemetry</h2>
+          <p>Real-time performance diagnostics and manual overrides.</p>
+        </header>
+
+        <div class="status-grid">
+          <!-- Server State Card -->
+          <div class="card state-card">
+            <div class="card-body">
+              <h3>Server State</h3>
+              <div class="state-display">
+                <span id="server-state-badge" class="state-badge sleeping">SLEEPING</span>
+                <p id="state-desc">Listening on port 25565 for incoming player connections.</p>
+              </div>
+              <div class="control-actions">
+                <button id="btn-start" class="btn btn-success">Wake Up Server</button>
+                <button id="btn-stop" class="btn btn-danger">Stop Server</button>
+                <button id="btn-sleep" class="btn btn-warning">Sleep Mode</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Telemetry Card: CPU -->
+          <div class="card telemetry-card">
+            <div class="card-body">
+              <div class="card-icon">⚡</div>
+              <h3>Java CPU Usage</h3>
+              <div class="value-display">
+                <span id="cpu-value">0.0</span> <span class="unit">%</span>
+              </div>
+              <div class="progress-bar-container">
+                <div id="cpu-progress" class="progress-bar" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Telemetry Card: RAM -->
+          <div class="card telemetry-card">
+            <div class="card-body">
+              <div class="card-icon">🧠</div>
+              <h3>Java RAM Usage</h3>
+              <div class="value-display">
+                <span id="ram-value">0.00</span> <span class="unit">GB</span>
+              </div>
+              <div class="progress-bar-container">
+                <div id="ram-progress" class="progress-bar" style="width: 0%"></div>
+              </div>
+              <div class="ram-limits">Max allocation: 8.00 GB</div>
+            </div>
+          </div>
+
+          <!-- Telemetry Card: Uptime -->
+          <div class="card telemetry-card">
+            <div class="card-body">
+              <div class="card-icon">⏳</div>
+              <h3>Server Uptime</h3>
+              <div class="value-display">
+                <span id="uptime-value">N/A</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="players-panel card">
+          <div class="card-body">
+            <h3>Active Players (<span id="player-count">0</span>)</h3>
+            <div id="players-list-container" class="players-list-empty">
+              No players currently online.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Live Console -->
+      <section id="tab-console" class="tab-panel">
+        <header class="panel-header">
+          <h2>Interactive Server Console</h2>
+          <p>Live stdout log streams and direct RCON terminal injection.</p>
+        </header>
+        <div class="console-wrapper">
+          <div id="console-log" class="console-log">
+            <!-- Logs will load here -->
+          </div>
+          <form id="console-input-form" class="console-input-area">
+            <input type="text" id="console-input" placeholder="Type a console command (e.g. give ColbyJacks diamond)..." autocomplete="off">
+            <button type="submit" class="btn btn-primary">Send</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Tab: Player Memories -->
+      <section id="tab-memories" class="tab-panel">
+        <header class="panel-header">
+          <h2>Player Conversation History</h2>
+          <p>Persistent AI memory logs and session records per player.</p>
+        </header>
+        <div class="memories-container">
+          <div class="players-sidebar card">
+            <h3>Players</h3>
+            <ul id="memories-players-list">
+              <!-- Player list populated by JS -->
+            </ul>
+          </div>
+          <div class="memory-viewer card">
+            <h3>Chat Logs</h3>
+            <div id="memory-chat-log" class="memory-chat-log-empty">
+              Select a player to load conversation memories.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Mod Item Search -->
+      <section id="tab-search" class="tab-panel">
+        <header class="panel-header">
+          <h2>Mod Item Language Scanner</h2>
+          <p>Scan server mods localization entries to map names to item IDs.</p>
+        </header>
+        <div class="card search-card">
+          <div class="card-body">
+            <div class="search-form">
+              <input type="text" id="search-query" placeholder="Type an item or block name (e.g. woodcutter, bacon, bed)...">
+              <button id="btn-search" class="btn btn-primary">Scan Local Jars</button>
+            </div>
+            <div id="search-results-container" class="search-results-empty">
+              Enter an item name above to search the translation database.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Settings -->
+      <section id="tab-settings" class="tab-panel">
+        <header class="panel-header">
+          <h2>Application Settings</h2>
+          <p>Configure directory bindings and local system overrides.</p>
+        </header>
+        <div class="card settings-card">
+          <div class="card-body">
+            <h3>Server Directory Integration</h3>
+            <p class="settings-desc">This folder contains your world files, mods, and `server.properties` configuration.</p>
+            <div class="settings-path-area">
+              <input type="text" id="settings-server-dir-path" readonly placeholder="No server folder selected...">
+              <button id="btn-change-dir" class="btn btn-primary">Browse Folder</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Setup Overlay Screen -->
+  <div id="setup-screen" class="setup-overlay">
+    <div class="setup-card card">
+      <div class="card-body">
+        <div class="setup-logo">🛡️</div>
+        <h2>Welcome to AgentRCON</h2>
+        <p>Before launching, please select the directory where your Minecraft server is installed. We will automatically detect your configuration, mod libraries, and log databases.</p>
+        <button id="btn-select-dir" class="btn btn-primary">Select Minecraft Server Folder</button>
+        <div id="setup-error" class="setup-error-message"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
