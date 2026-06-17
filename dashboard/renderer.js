@@ -65,6 +65,8 @@ navItems.forEach(item => {
     // Tab-specific trigger
     if (tab === 'memories') {
       loadPlayerMemories();
+    } else if (tab === 'properties') {
+      loadServerProperties();
     }
   });
 });
@@ -519,3 +521,97 @@ btnChangeDir.addEventListener('click', handleSelectDir);
 
 // Initialize app on load
 initApp();
+
+// Server Properties Editor state & handlers
+let serverPropertiesData = {};
+
+function loadServerProperties() {
+  const formContainer = document.getElementById('properties-form-container');
+  formContainer.innerHTML = '<p class="properties-loading">Loading server properties...</p>';
+  
+  window.api.getProperties()
+    .then(data => {
+      serverPropertiesData = data.properties || {};
+      renderProperties();
+    })
+    .catch(err => {
+      formContainer.innerHTML = `<p class="properties-loading" style="color: var(--status-stopping);">Failed to load properties: ${err.message || err}</p>`;
+    });
+}
+
+function renderProperties() {
+  const formContainer = document.getElementById('properties-form-container');
+  const searchVal = document.getElementById('properties-search').value.toLowerCase().trim();
+  
+  const keys = Object.keys(serverPropertiesData).sort();
+  let html = '';
+  
+  let visibleCount = 0;
+  for (const key of keys) {
+    if (searchVal && !key.toLowerCase().includes(searchVal)) {
+      continue;
+    }
+    visibleCount++;
+    const val = serverPropertiesData[key];
+    html += `
+      <div class="properties-row">
+        <div class="properties-key">${key}</div>
+        <div class="properties-value-input">
+          <input type="text" class="property-input-field" data-key="${key}" value="${val}">
+        </div>
+      </div>
+    `;
+  }
+  
+  if (visibleCount === 0) {
+    if (keys.length === 0) {
+      formContainer.innerHTML = '<p class="properties-loading">No server properties found.</p>';
+    } else {
+      formContainer.innerHTML = '<p class="properties-loading">No properties match search filter.</p>';
+    }
+  } else {
+    formContainer.innerHTML = html;
+    
+    // Bind change listener to update our state cache
+    document.querySelectorAll('.property-input-field').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const k = e.target.dataset.key;
+        serverPropertiesData[k] = e.target.value;
+      });
+    });
+  }
+}
+
+function saveServerProperties() {
+  const btnSave = document.getElementById('btn-save-properties');
+  const originalText = btnSave.textContent;
+  
+  btnSave.disabled = true;
+  btnSave.textContent = 'Saving...';
+  
+  window.api.saveProperties(serverPropertiesData)
+    .then(res => {
+      if (res.success) {
+        btnSave.textContent = 'Saved!';
+        btnSave.style.background = 'var(--status-running)';
+        setTimeout(() => {
+          btnSave.textContent = originalText;
+          btnSave.style.background = '';
+          btnSave.disabled = false;
+        }, 2000);
+      } else {
+        alert("Failed to save properties: " + res.message);
+        btnSave.textContent = originalText;
+        btnSave.disabled = false;
+      }
+    })
+    .catch(err => {
+      alert("Error saving properties: " + (err.message || err));
+      btnSave.textContent = originalText;
+      btnSave.disabled = false;
+    });
+}
+
+// Bind search and save events
+document.getElementById('properties-search').addEventListener('input', renderProperties);
+document.getElementById('btn-save-properties').addEventListener('click', saveServerProperties);

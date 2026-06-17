@@ -443,6 +443,45 @@ def read_file(relative_path):
     except Exception as e:
         return f"Error reading file: {e}"
 
+def load_all_server_properties():
+    props = {}
+    props_path = os.path.join(server_dir, "server.properties")
+    if os.path.exists(props_path):
+        try:
+            with open(props_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        key, val = line.split("=", 1)
+                        props[key.strip()] = val.strip()
+        except Exception:
+            pass
+    return props
+
+def save_all_server_properties(props):
+    props_path = os.path.join(server_dir, "server.properties")
+    try:
+        with open(props_path, "w", encoding="utf-8") as f:
+            f.write("#Minecraft server properties\n")
+            f.write("#Generated and edited via AgentRCON\n")
+            for k, v in sorted(props.items()):
+                f.write(f"{k}={v}\n")
+        parse_server_properties(server_dir)
+        return True
+    except Exception as e:
+        console.print(f"[bold red][-] Failed to save server properties: {e}[/bold red]")
+        return False
+
+def set_server_property(key, value):
+    props = load_all_server_properties()
+    props[key] = str(value)
+    if save_all_server_properties(props):
+        return f"Success: Property '{key}' set to '{value}'. A server restart is required for changes to take effect."
+    else:
+        return f"Error: Failed to write to server.properties."
+
 def execute_tool(name, args, player_name):
     if name == "run_rcon_commands":
         cmds = args.get("commands", [])
@@ -467,6 +506,10 @@ def execute_tool(name, args, player_name):
     elif name == "read_file":
         filepath = args.get("filepath", "")
         return read_file(filepath)
+    elif name == "set_server_property":
+        key = args.get("key", "")
+        value = args.get("value", "")
+        return set_server_property(key, value)
     else:
         return f"Unknown tool: {name}"
 
@@ -568,6 +611,10 @@ Available Tools:
 8. `read_file`: Reads the text contents of a file relative to the server folder root.
    Arguments: {{"filepath": "relative_path_to_file"}}
    Example: <CALL name="read_file">{{"filepath": "config/paper.yml"}}</CALL>
+
+9. `set_server_property`: Sets/updates a key-value property inside the Minecraft server's `server.properties` file. Note that a server restart is required for changes to take effect.
+   Arguments: {{"key": "property_name", "value": "property_value"}}
+   Example: <CALL name="set_server_property">{{"key": "view-distance", "value": "12"}}</CALL>
 
 CRITICAL RULES & PROTOCOLS:
 1. ITEM/MOB/BLOCK RESOLUTION PROTOCOL:
@@ -1090,6 +1137,13 @@ class AgentRCONAPIHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
             self.wfile.write(json.dumps({"logs": log_lines}).encode("utf-8"))
+        elif self.path == "/api/properties":
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            props = load_all_server_properties()
+            self.wfile.write(json.dumps({"properties": props}).encode("utf-8"))
         else:
             self.send_response(404)
             self._send_cors_headers()
@@ -1150,6 +1204,11 @@ class AgentRCONAPIHandler(BaseHTTPRequestHandler):
             else:
                 threading.Thread(target=warmup_model, daemon=True).start()
                 resp = {"success": True, "status": "starting", "message": "AI model loading initiated."}
+            self.wfile.write(json.dumps(resp).encode("utf-8"))
+        elif self.path == "/api/properties":
+            props = data.get("properties", {})
+            success = save_all_server_properties(props)
+            resp = {"success": success, "message": "Properties saved successfully." if success else "Failed to save properties."}
             self.wfile.write(json.dumps(resp).encode("utf-8"))
         else:
             self.send_response(404)

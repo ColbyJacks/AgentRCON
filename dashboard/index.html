@@ -31,6 +31,9 @@
         <button class="nav-item" data-tab="search">
           <span class="nav-icon">🔍</span> Mod Item Search
         </button>
+        <button class="nav-item" data-tab="properties">
+          <span class="nav-icon">📝</span> Server Properties
+        </button>
         <button class="nav-item" data-tab="settings">
           <span class="nav-icon">⚙️</span> Settings
         </button>
@@ -186,6 +189,29 @@
             </div>
             <div id="search-results-container" class="search-results-empty">
               Enter an item name above to search the translation database.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Server Properties -->
+      <section id="tab-properties" class="tab-panel">
+        <header class="panel-header">
+          <h2>Server Properties Editor</h2>
+          <p>View and modify settings in your `server.properties` file.</p>
+        </header>
+        <div class="card properties-card">
+          <div class="card-body">
+            <div class="properties-warning-banner" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; font-size: 14px; color: hsl(45, 95%, 65%);">
+              <span>⚠️</span>
+              <span>Changes to server properties require a Minecraft server restart to take effect.</span>
+            </div>
+            <div class="properties-toolbar" style="display: flex; gap: 16px; margin-bottom: 20px; align-items: center;">
+              <input type="text" id="properties-search" placeholder="Filter settings by key name (e.g. view-distance, pvp)..." style="flex: 1; outline: none;">
+              <button id="btn-save-properties" class="btn btn-success" style="white-space: nowrap;">Save Properties</button>
+            </div>
+            <div id="properties-form-container" class="properties-form-container">
+              <p class="properties-loading">Loading server properties...</p>
             </div>
           </div>
         </div>

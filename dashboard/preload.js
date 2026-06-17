@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld('api', {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query })
   }).then(res => res.json()),
+  getProperties: () => fetch('http://127.0.0.1:8000/api/properties').then(res => res.json()),
+  saveProperties: (properties) => fetch('http://127.0.0.1:8000/api/properties', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ properties })
+  }).then(res => res.json()),
 
   // Electron native IPC channels
   selectServerDir: () => ipcRenderer.invoke('select-server-dir'),
