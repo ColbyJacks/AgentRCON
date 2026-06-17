@@ -472,8 +472,8 @@ Available Tools:
    Example: <CALL name="list_installed_mods">{{}}</CALL>
 
 6. `execute_python_code`: Executes arbitrary Python 3 code in a safe subprocess sandbox and returns stdout/stderr. Use this to write complex scripts, parse web pages, run math calculations, query external APIs, or create temporary custom tools.
-   Arguments: {"code": "python_code_string"}
-   Example: <CALL name="execute_python_code">{"code": "import urllib.request\nhtml = urllib.request.urlopen('https://some-api.com').read().decode()\nprint(html)"}</CALL>
+   Arguments: {{"code": "python_code_string"}}
+   Example: <CALL name="execute_python_code">{{"code": "import urllib.request\nhtml = urllib.request.urlopen('https://some-api.com').read().decode()\nprint(html)"}}</CALL>
 
 IMPORTANT RULES:
 - When targeting the player, you MUST use their exact username '{player_name}' in console commands instead of selectors like '@p' or '@s'.
