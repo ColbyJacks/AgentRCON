@@ -692,7 +692,7 @@ def stats_monitoring_loop():
             try:
                 with MCRcon("127.0.0.1", RCON_PASS, port=RCON_PORT) as mcr:
                     resp = mcr.command("list")
-                    match = re.search(r"There are (\d+) of \d+ players online(?::\s*(.*))?", resp)
+                    match = re.search(r"There are (\d+) of (?:a max of )?\d+ players online(?::\s*(.*))?", resp)
                     if match:
                         player_count = int(match.group(1))
                         players_str = match.group(2)
