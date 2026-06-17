@@ -759,7 +759,7 @@ def watch_logs():
                 time.sleep(1)
                 continue
             try:
-                f = open(LOG_PATH, "r", encoding="utf-8", errors="ignore")
+                f = open(LOG_PATH, "rb")
                 # On initial daemon startup, seek to end so we don't parse historical logs
                 f.seek(0, os.SEEK_END)
                 last_position = f.tell()
@@ -775,7 +775,7 @@ def watch_logs():
                     console.print("[bold cyan][*] Log file truncated or recreated. Reopening...[/bold cyan]")
                     f.close()
                     try:
-                        f = open(LOG_PATH, "r", encoding="utf-8", errors="ignore")
+                        f = open(LOG_PATH, "rb")
                         last_position = 0
                     except Exception:
                         f = None
@@ -788,19 +788,22 @@ def watch_logs():
                 last_position = 0
                 continue
 
-            line = f.readline()
-            if not line:
+            line_bytes = f.readline()
+            if not line_bytes:
                 # We reached EOF. Check if file has grown but Python is caching EOF on Windows
                 if os.path.exists(LOG_PATH):
                     current_size = os.path.getsize(LOG_PATH)
                     if current_size > last_position:
                         f.close()
-                        f = open(LOG_PATH, "r", encoding="utf-8", errors="ignore")
+                        f = open(LOG_PATH, "rb")
                         f.seek(last_position)
                 time.sleep(0.2)
                 continue
                 
             last_position = f.tell()
+            
+            # Decode bytes to string
+            line = line_bytes.decode("utf-8", errors="ignore")
             
             # Print parsed chat lines nicely to console
             player_name = extract_player_name(line)
