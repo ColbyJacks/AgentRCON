@@ -316,6 +316,29 @@ def run_rcon_commands(commands, player_name="Console"):
         return f"RCON Connection Error: {e}"
     return "\n".join(results)
 
+def execute_python_code(code):
+    console.print(f"[bold grey53][*] Executing Python code...[/bold grey53]")
+    try:
+        temp_dir = os.path.join(server_dir, "scratch")
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_file = os.path.join(temp_dir, "temp_tool_execution.py")
+        with open(temp_file, "w", encoding="utf-8") as f:
+            f.write(code)
+            
+        res = subprocess.run(
+            [sys.executable, temp_file],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd=server_dir
+        )
+        output = res.stdout + res.stderr
+        return output if output.strip() else "Python code executed successfully (no output)."
+    except subprocess.TimeoutExpired:
+        return "Error: Python code execution timed out (limit 15 seconds)."
+    except Exception as e:
+        return f"Error executing Python code: {e}"
+
 def execute_tool(name, args, player_name):
     if name == "run_rcon_commands":
         cmds = args.get("commands", [])
@@ -331,6 +354,9 @@ def execute_tool(name, args, player_name):
         return search_item_by_name(q)
     elif name == "list_installed_mods":
         return list_installed_mods()
+    elif name == "execute_python_code":
+        code = args.get("code", "")
+        return execute_python_code(code)
     else:
         return f"Unknown tool: {name}"
 
@@ -421,12 +447,17 @@ Available Tools:
    Arguments: None
    Example: <CALL name="list_installed_mods">{{}}</CALL>
 
+6. `execute_python_code`: Executes arbitrary Python 3 code in a safe subprocess sandbox and returns stdout/stderr. Use this to write complex scripts, parse web pages, run math calculations, query external APIs, or create temporary custom tools.
+   Arguments: {"code": "python_code_string"}
+   Example: <CALL name="execute_python_code">{"code": "import urllib.request\nhtml = urllib.request.urlopen('https://some-api.com').read().decode()\nprint(html)"}</CALL>
+
 IMPORTANT RULES:
 - When targeting the player, you MUST use their exact username '{player_name}' in console commands instead of selectors like '@p' or '@s'.
 - Minecraft 1.20.1 uses curly brace NBT syntax (e.g. `minecraft:diamond_sword{{display:{{Name:'{{"text":"Legendary Sword"}}'}}}}`). Square brackets `[]` are 1.21+ components and will CRASH the server.
 - NEVER put spaces between relative coordinate tildes ('~') and their values (e.g. write '~-4' or '~2', NOT '~ -4' or '~ 2').
 - Console executes from server center (no position). You MUST prefix all coordinate-dependent commands (like setblock, fill, summon) with `execute at {player_name} run ...` so they execute at the player's location.
 - NEVER run administrative/destructive commands: stop, op, deop, ban, ban-ip, kick, whitelist.
+- If you need to perform actions not covered by existing tools (e.g. doing complex calculations, scraping structured web data, calling JSON APIs, or creating custom tools), you can write and execute a custom Python script using the `execute_python_code` tool.
 - Be extremely brief and concise in your responses. Do NOT append open-ended follow-up questions (such as "How can I assist you further?", "Is there anything else I can do?") when you successfully complete a task. Just state that the task was completed or provide the requested information, and stop.
 
 Here is your local Minecraft 1.20.1 database containing exact Item IDs, Entity IDs, Status Effects, and Command Syntax:
@@ -470,7 +501,7 @@ Your loop structure:
                 model=active_model,
                 messages=messages,
                 temperature=0.2,
-                extra_body={"options": {"num_ctx": 8192}}
+                extra_body={"options": {"num_ctx": 65536}}
             )
             ai_output = response.choices[0].message.content.strip()
         except Exception as e:
