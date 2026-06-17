@@ -384,6 +384,65 @@ def execute_python_code(code):
     except Exception as e:
         return f"Error executing Python code: {e}"
 
+def list_directory(relative_path=""):
+    target_dir = os.path.abspath(os.path.join(server_dir, relative_path.strip("/").strip("\\")))
+    if not target_dir.startswith(os.path.abspath(server_dir)):
+        return "Error: Access denied. Directory is outside the server root."
+        
+    if not os.path.exists(target_dir):
+        return f"Error: Directory '{relative_path}' does not exist."
+        
+    if not os.path.isdir(target_dir):
+        return f"Error: '{relative_path}' is not a directory."
+        
+    try:
+        items = os.listdir(target_dir)
+        files = []
+        dirs = []
+        for item in items:
+            full_path = os.path.join(target_dir, item)
+            if os.path.isdir(full_path):
+                dirs.append(item + "/")
+            else:
+                files.append(item)
+        dirs.sort()
+        files.sort()
+        res = []
+        if dirs:
+            res.append("Directories:")
+            res.extend([f" - {d}" for d in dirs])
+        if files:
+            res.append("Files:")
+            res.extend([f" - {f}" for f in files])
+        return "\n".join(res) if res else "Directory is empty."
+    except Exception as e:
+        return f"Error listing directory: {e}"
+
+def read_file(relative_path):
+    target_file = os.path.abspath(os.path.join(server_dir, relative_path.strip("/").strip("\\")))
+    if not target_file.startswith(os.path.abspath(server_dir)):
+        return "Error: Access denied. File is outside the server root."
+        
+    if not os.path.exists(target_file):
+        return f"Error: File '{relative_path}' does not exist."
+        
+    if os.path.isdir(target_file):
+        return f"Error: '{relative_path}' is a directory, not a file."
+        
+    try:
+        file_size = os.path.getsize(target_file)
+        if file_size > 2 * 1024 * 1024:
+            return f"Error: File size is too large ({file_size / (1024*1024):.2f} MB). Limit is 2 MB."
+            
+        with open(target_file, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read(50000)
+            
+        if len(content) == 50000:
+            return content + "\n\n... [TRUNCATED (exceeded 50,000 characters limit)] ..."
+        return content
+    except Exception as e:
+        return f"Error reading file: {e}"
+
 def execute_tool(name, args, player_name):
     if name == "run_rcon_commands":
         cmds = args.get("commands", [])
@@ -402,6 +461,12 @@ def execute_tool(name, args, player_name):
     elif name == "execute_python_code":
         code = args.get("code", "")
         return execute_python_code(code)
+    elif name == "list_directory":
+        directory = args.get("directory", "")
+        return list_directory(directory)
+    elif name == "read_file":
+        filepath = args.get("filepath", "")
+        return read_file(filepath)
     else:
         return f"Unknown tool: {name}"
 
@@ -495,6 +560,14 @@ Available Tools:
 6. `execute_python_code`: Executes arbitrary Python 3 code in a safe subprocess sandbox and returns stdout/stderr. Use this to write complex scripts, parse web pages, run math calculations, query external APIs, or create temporary custom tools.
    Arguments: {{"code": "python_code_string"}}
    Example: <CALL name="execute_python_code">{{"code": "import urllib.request\nhtml = urllib.request.urlopen('https://some-api.com').read().decode()\nprint(html)"}}</CALL>
+
+7. `list_directory`: Lists files and subdirectories inside a directory relative to the server folder root.
+   Arguments: {{"directory": "relative_path_to_directory"}}
+   Example: <CALL name="list_directory">{{"directory": "config"}}</CALL>
+
+8. `read_file`: Reads the text contents of a file relative to the server folder root.
+   Arguments: {{"filepath": "relative_path_to_file"}}
+   Example: <CALL name="read_file">{{"filepath": "config/paper.yml"}}</CALL>
 
 CRITICAL RULES & PROTOCOLS:
 1. ITEM/MOB/BLOCK RESOLUTION PROTOCOL:
