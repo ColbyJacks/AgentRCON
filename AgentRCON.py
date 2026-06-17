@@ -482,6 +482,175 @@ def set_server_property(key, value):
     else:
         return f"Error: Failed to write to server.properties."
 
+def get_player_status(player_name):
+    try:
+        with MCRcon("127.0.0.1", RCON_PASS, port=RCON_PORT) as mcr:
+            pos_resp = mcr.command(f"data get entity {player_name} Pos")
+            if "No entity was found" in pos_resp:
+                return f"Player '{player_name}' is offline or not found."
+            
+            dim_resp = mcr.command(f"data get entity {player_name} Dimension")
+            health_resp = mcr.command(f"data get entity {player_name} Health")
+            food_resp = mcr.command(f"data get entity {player_name} foodLevel")
+            effects_resp = mcr.command(f"data get entity {player_name} ActiveEffects")
+            
+            pos_match = re.search(r"\[(-?\d+\.\d+)d,\s*(-?\d+\.\d+)d,\s*(-?\d+\.\d+)d\]", pos_resp)
+            pos_str = pos_match.group(0) if pos_match else pos_resp
+            
+            dim_match = re.search(r'"([^"]+)"', dim_resp)
+            dim_str = dim_match.group(1) if dim_match else dim_resp
+            
+            health_match = re.search(r"(-?\d+\.\d+f|-?\d+)", health_resp)
+            health_str = health_match.group(1) if health_match else health_resp
+            
+            food_match = re.search(r"(\d+)", food_resp)
+            food_str = food_match.group(1) if food_match else food_resp
+            
+            effects_str = "None"
+            if effects_resp and "ActiveEffects" in effects_resp:
+                effects_str = effects_resp
+                
+            return (
+                f"Player Status for '{player_name}':\n"
+                f" - Position: {pos_str}\n"
+                f" - Dimension: {dim_str}\n"
+                f" - Health: {health_str}\n"
+                f" - Hunger: {food_str}/20\n"
+                f" - Active Effects: {effects_str}"
+            )
+    except Exception as e:
+        return f"Error querying player status: {e}"
+
+def inspect_surroundings(player_name, radius=20):
+    try:
+        radius = int(radius)
+        with MCRcon("127.0.0.1", RCON_PASS, port=RCON_PORT) as mcr:
+            player_pos_resp = mcr.command(f"data get entity {player_name} Pos")
+            if "No entity was found" in player_pos_resp:
+                return f"Player '{player_name}' is offline."
+            
+            player_pos_match = re.search(r"\[(-?\d+\.\d+)d,\s*(-?\d+\.\d+)d,\s*(-?\d+\.\d+)d\]", player_pos_resp)
+            if not player_pos_match:
+                return "Could not determine player position."
+            
+            px, py, pz = map(float, player_pos_match.groups())
+            
+            cmd = f"execute at {player_name} as @e[distance=0.1..{radius},limit=15] run data get entity @s Pos"
+            entities_resp = mcr.command(cmd)
+            
+            lines = entities_resp.split("\n")
+            results = []
+            import math
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                match = re.search(r"^(.+?) has the following entity data:\s*\[(-?\d+\.\d+)d,\s*(-?\d+\.\d+)d,\s*(-?\d+\.\d+)d\]", line)
+                if match:
+                    name = match.group(1).strip()
+                    ex, ey, ez = map(float, match.groups()[1:])
+                    dist = math.sqrt((ex - px)**2 + (ey - py)**2 + (ez - pz)**2)
+                    results.append((name, dist))
+            
+            if not results:
+                return f"No entities found within {radius} blocks of {player_name}."
+            
+            results.sort(key=lambda x: x[1])
+            out = [f"Entities within {radius} blocks of {player_name}:"]
+            for name, dist in results:
+                out.append(f" - {name}: {dist:.1f} blocks away")
+            return "\n".join(out)
+    except Exception as e:
+        return f"Error inspecting surroundings: {e}"
+
+def get_server_stats():
+    global server_status, server_process, server_uptime_start, player_count
+    cpu = 0.0
+    ram = 0.0
+    uptime = "N/A"
+    
+    if server_process and server_status in ["STARTING", "RUNNING", "STOPPING"]:
+        try:
+            p = psutil.Process(server_process.pid)
+            cpu = p.cpu_percent(interval=None) or 0.0
+            ram = p.memory_info().rss / (1024 ** 3)
+        except Exception:
+            pass
+            
+    if server_uptime_start and server_status in ["STARTING", "RUNNING"]:
+        elapsed = int(time.time() - server_uptime_start)
+        h = elapsed // 3600
+        m = (elapsed % 3600) // 60
+        s = elapsed % 60
+        uptime = f"{h}h {m}m {s}s"
+        
+    tps_str = "TPS: Unknown (Mod not available)"
+    if server_status == "RUNNING":
+        try:
+            with MCRcon("127.0.0.1", RCON_PASS, port=RCON_PORT) as mcr:
+                tps_resp = mcr.command("tps")
+                if "Unknown or incomplete command" not in tps_resp:
+                    tps_str = f"TPS: {tps_resp.strip()}"
+                else:
+                    spark_resp = mcr.command("spark tps")
+                    if "Unknown or incomplete command" not in spark_resp:
+                        tps_str = f"TPS: {spark_resp.strip()}"
+        except Exception:
+            pass
+            
+    return (
+        f"Server Status: {server_status}\n"
+        f"Uptime: {uptime}\n"
+        f"Java CPU: {cpu:.1f}%\n"
+        f"Java RAM: {ram:.2f} GB / 8.00 GB\n"
+        f"Players Online: {player_count}\n"
+        f"{tps_str}"
+    )
+
+def create_world_backup():
+    global server_status
+    backup_dir = os.path.join(server_dir, "backups")
+    world_dir = os.path.join(server_dir, "world")
+    
+    if not os.path.exists(world_dir):
+        return "Error: World directory 'world' does not exist."
+        
+    os.makedirs(backup_dir, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    backup_filename = f"world_backup_{timestamp}.zip"
+    backup_path = os.path.join(backup_dir, backup_filename)
+    
+    saved = False
+    if server_status == "RUNNING":
+        try:
+            with MCRcon("127.0.0.1", RCON_PASS, port=RCON_PORT) as mcr:
+                mcr.command("save-off")
+                mcr.command("save-all flush")
+                saved = True
+                console.print("[bold yellow][*] Auto-save disabled and worlds flushed for backup.[/bold yellow]")
+        except Exception as e:
+            console.print(f"[bold red][-] Failed to disable saving: {e}[/bold red]")
+            
+    try:
+        console.print(f"[bold yellow][*] Creating zip backup at {backup_path}...[/bold yellow]")
+        with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(world_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, server_dir)
+                    zipf.write(file_path, arcname)
+        return f"Success: World backup created successfully at: backups/{backup_filename}"
+    except Exception as e:
+        return f"Error creating backup: {e}"
+    finally:
+        if saved:
+            try:
+                with MCRcon("127.0.0.1", RCON_PASS, port=RCON_PORT) as mcr:
+                    mcr.command("save-on")
+                    console.print("[bold green][+] Auto-save re-enabled.[/bold green]")
+            except Exception:
+                pass
+
 def execute_tool(name, args, player_name):
     if name == "run_rcon_commands":
         cmds = args.get("commands", [])
@@ -510,6 +679,17 @@ def execute_tool(name, args, player_name):
         key = args.get("key", "")
         value = args.get("value", "")
         return set_server_property(key, value)
+    elif name == "get_player_status":
+        target = args.get("player_name", player_name)
+        return get_player_status(target)
+    elif name == "inspect_surroundings":
+        target = args.get("player_name", player_name)
+        rad = args.get("radius", 20)
+        return inspect_surroundings(target, rad)
+    elif name == "get_server_stats":
+        return get_server_stats()
+    elif name == "create_world_backup":
+        return create_world_backup()
     else:
         return f"Unknown tool: {name}"
 
@@ -570,8 +750,13 @@ def handle_agentic_loop(question, player_name="Player", use_web=False):
         except Exception:
             pass
 
+    online_list_str = ", ".join(online_players_list) if online_players_list else "None"
+    cur_time_str = time.strftime('%Y-%m-%d %H:%M:%S')
+
     system_prompt = f"""You are AgentRCON, an autonomous, highly accurate Minecraft 1.20.1 Server Manager AI.
 The player interacting with you is '{player_name}'. You have direct command console control via RCON tools.
+Other online players: {online_list_str}.
+Current server local time: {cur_time_str}.
 You are also happy to assist with general, non-Minecraft questions by using your general knowledge or the `web_search` tool to look up real-time information.
 
 To accomplish tasks or answer queries, you use a ReAct (Reasoning -> Action -> Observation) loop.
@@ -616,19 +801,43 @@ Available Tools:
    Arguments: {{"key": "property_name", "value": "property_value"}}
    Example: <CALL name="set_server_property">{{"key": "view-distance", "value": "12"}}</CALL>
 
+10. `get_player_status`: Queries coordinates, dimension, health, hunger, and active status effects of a player.
+    Arguments: {{"player_name": "string"}}
+    Example: <CALL name="get_player_status">{{"player_name": "{player_name}"}}</CALL>
+
+11. `inspect_surroundings`: Lists all surrounding entities (mobs, items, players) and their distance (in blocks) from the target player.
+    Arguments: {{"player_name": "string", "radius": 20}}
+    Example: <CALL name="inspect_surroundings">{{"player_name": "{player_name}", "radius": 20}}</CALL>
+
+12. `get_server_stats`: Retrieves real-time server stats (Java memory, CPU usage, uptime, player counts, TPS if mod available).
+    Arguments: None
+    Example: <CALL name="get_server_stats">{{}}</CALL>
+
+13. `create_world_backup`: Runs save-off, flushes worlds, compresses the 'world' folder into backups/, and re-enables save-on.
+    Arguments: None
+    Example: <CALL name="create_world_backup">{{}}</CALL>
+
 CRITICAL RULES & PROTOCOLS:
-1. ITEM/MOB/BLOCK RESOLUTION PROTOCOL:
+1. QUERY INTENT & SUBJECT ANALYSIS CHECKLIST:
+   - Before calling any tools, you must analyze the query's intent in your `<THOUGHT>` tags:
+     1. Identify the subject: Is it referring to the player '{player_name}' or other online players ({online_list_str})?
+     2. Identify the goal: Is it player status, surroundings checks, server performance, backups, general questions, or giving items?
+     3. Check exclusions: Never run `search_item_by_name` on usernames, pronouns, conversational keywords, or command syntax terms. Only call it when resolving a specific unrecognized item, block, or entity display name.
+2. AGENTIC EXPLORATION & RESILIENCE:
+   - If a request is ambiguous, query status first! Use `get_player_status` or `inspect_surroundings` to see what is around the player before executing modifications.
+   - If a command fails or returns an error observation, analyze the error output in your thought block, correct your parameters or spelling, and retry the command. Do not give up early.
+3. ITEM/MOB/BLOCK RESOLUTION PROTOCOL:
    - When a player requests an item, block, or entity, first check the vanilla reference database below.
    - If the player has already provided the exact modded ID (in `modid:item_name` format, e.g. `gofish:slimefish` or `sophisticatedbackpacks:backpack`), you can use it directly in RCON commands.
    - If it is NOT in the reference database and the player did NOT provide the exact ID, you MUST call `search_item_by_name` FIRST to find its exact mod ID.
    - Do NOT run a `web_search` for item IDs unless both the reference database and `search_item_by_name` fail to return results.
-2. When targeting the player, you MUST use their exact username '{player_name}' in console commands instead of selectors like '@p' or '@s'.
-3. Minecraft 1.20.1 uses curly brace NBT syntax (e.g. `minecraft:diamond_sword{{display:{{Name:'{{"text":"Legendary Sword"}}'}}}}`). Square brackets `[]` are 1.21+ components and will CRASH the server.
-4. NEVER put spaces between relative coordinate tildes ('~') and their values (e.g. write '~-4' or '~2', NOT '~ -4' or '~ 2').
-5. Console executes from server center (no position). You MUST prefix all coordinate-dependent commands (like setblock, fill, summon) with `execute at {player_name} run ...` so they execute at the player's location.
-6. NEVER run administrative/destructive commands: stop, op, deop, ban, ban-ip, kick, whitelist.
-7. If you need to perform actions not covered by existing tools (e.g. doing complex calculations, scraping structured web data, calling JSON APIs, or creating custom tools), you can write and execute a custom Python script using the `execute_python_code` tool.
-8. Be extremely brief and concise in your responses. Do NOT append open-ended follow-up questions (such as "How can I assist you further?", "Is there anything else I can do?") when you successfully complete a task. Just state that the task was completed or provide the requested information, and stop.
+4. When targeting the player, you MUST use their exact username '{player_name}' in console commands instead of selectors like '@p' or '@s'.
+5. Minecraft 1.20.1 uses curly brace NBT syntax (e.g. `minecraft:diamond_sword{{display:{{Name:'{{"text":"Legendary Sword"}}'}}}}`). Square brackets `[]` are 1.21+ components and will CRASH the server.
+6. NEVER put spaces between relative coordinate tildes ('~') and their values (e.g. write '~-4' or '~2', NOT '~ -4' or '~ 2').
+7. Console executes from server center (no position). You MUST prefix all coordinate-dependent commands (like setblock, fill, summon) with `execute at {player_name} run ...` so they execute at the player's location.
+8. NEVER run administrative/destructive commands: stop, op, deop, ban, ban-ip, kick, whitelist.
+9. If you need to perform actions not covered by existing tools (e.g. doing complex calculations, scraping structured web data, calling JSON APIs, or creating custom tools), you can write and execute a custom Python script using the `execute_python_code` tool.
+10. Be extremely brief and concise in your responses. Do NOT append open-ended follow-up questions (such as "How can I assist you further?", "Is there anything else I can do?") when you successfully complete a task. Just state that the task was completed or provide the requested information, and stop.
 
 Here is your local Minecraft 1.20.1 database containing exact Item IDs, Entity IDs, Status Effects, and Command Syntax:
 ---
