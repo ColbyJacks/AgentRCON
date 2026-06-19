@@ -476,6 +476,10 @@ def save_all_server_properties(props):
 
 def set_server_property(key, value):
     props = load_all_server_properties()
+    if key not in props:
+        valid_keys = ", ".join(sorted(props.keys()))
+        return f"Error: '{key}' is not a valid Minecraft server property name. You can only update existing properties in server.properties. Valid properties are: {valid_keys}."
+        
     props[key] = str(value)
     if save_all_server_properties(props):
         return f"Success: Property '{key}' set to '{value}'. A server restart is required for changes to take effect."
