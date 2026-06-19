@@ -89,6 +89,22 @@ SERVER_JAR = os.path.join(server_dir, "server.jar")
 # Security guardrails
 BLACKLISTED_COMMANDS = {"stop", "op", "deop", "ban", "ban-ip", "pardon", "pardon-ip", "kick", "whitelist", "save-all"}
 
+VALID_PROPERTIES = {
+    "allow-flight", "allow-nether", "broadcast-console-to-ops", "broadcast-rcon-to-ops",
+    "difficulty", "enable-command-block", "enable-jmx-monitoring", "enable-query",
+    "enable-rcon", "enable-status", "enforce-secure-profile", "enforce-whitelist",
+    "entity-broadcast-range-percentage", "force-gamemode", "function-permission-level",
+    "gamemode", "generate-structures", "generator-settings", "hardcore", "hide-online-players",
+    "initial-disabled-packs", "initial-enabled-packs", "level-name", "level-seed", "level-type",
+    "max-chained-neighbor-updates", "max-players", "max-tick-time", "max-world-size", "motd",
+    "network-compression-threshold", "online-mode", "op-permission-level", "player-idle-timeout",
+    "prevent-proxy-connections", "pvp", "query.port", "rate-limit", "rcon.password", "rcon.port",
+    "require-resource-pack", "resource-pack", "resource-pack-prompt", "resource-pack-sha1",
+    "server-ip", "server-port", "simulation-distance", "spawn-animals", "spawn-monsters",
+    "spawn-npcs", "spawn-protection", "sync-chunk-writes", "text-filtering-config",
+    "use-native-transport", "view-distance", "white-list"
+}
+
 # Ollama API Configuration
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/v1")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma4:e2b-it-qat")
@@ -475,11 +491,11 @@ def save_all_server_properties(props):
         return False
 
 def set_server_property(key, value):
-    props = load_all_server_properties()
-    if key not in props:
-        valid_keys = ", ".join(sorted(props.keys()))
-        return f"Error: '{key}' is not a valid Minecraft server property name. You can only update existing properties in server.properties. Valid properties are: {valid_keys}."
+    if key not in VALID_PROPERTIES:
+        valid_keys = ", ".join(sorted(VALID_PROPERTIES))
+        return f"Error: '{key}' is not a valid Minecraft server property name. Valid properties are: {valid_keys}."
         
+    props = load_all_server_properties()
     props[key] = str(value)
     if save_all_server_properties(props):
         return f"Success: Property '{key}' set to '{value}'. A server restart is required for changes to take effect."
@@ -829,7 +845,8 @@ CRITICAL RULES & PROTOCOLS:
 5. RESTRICTIONS:
    - NEVER run destructive commands: stop, op, deop, ban, ban-ip, kick, whitelist.
    - NEVER use set_server_property for in-game time, weather, gamemode, health, or items. Use run_rcon_commands instead.
-6. CONCISENESS: Be extremely brief. Do not append open-ended follow-up questions (e.g., "Is there anything else I can do?"). State completion or facts and stop.
+6. ACTION REQUIREMENT: If the user's request requires executing a server command or performing an action (like giving items, changing time/weather, checking player status), you MUST execute the corresponding tool call first. NEVER reply with <SAY> claiming you executed a command or performed an action unless you have the <OBSERVATION> showing the tool call succeeded.
+7. CONCISENESS: Be extremely brief. Do not append open-ended follow-up questions (e.g., "Is there anything else I can do?"). State completion or facts and stop.
 
 Here is your local Minecraft 1.20.1 database containing exact Item IDs, Entity IDs, Status Effects, and Command Syntax:
 ---
