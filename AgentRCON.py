@@ -655,9 +655,6 @@ def execute_tool(name, args, player_name):
     if name == "run_rcon_commands":
         cmds = args.get("commands", [])
         return run_rcon_commands(cmds, player_name)
-    elif name == "run_rcon_command":
-        cmd = args.get("command", "")
-        return run_rcon_command(cmd, player_name)
     elif name == "web_search":
         q = args.get("query", "")
         return web_search(q)
@@ -769,75 +766,66 @@ Available Tools:
    Arguments: {{"commands": ["command_without_leading_slash_1", "command_without_leading_slash_2", ...]}}
    Example: <CALL name="run_rcon_commands">{{"commands": ["give {player_name} minecraft:cooked_cod 1", "effect give {player_name} speed 30 1"]}}</CALL>
 
-2. `run_rcon_command`: Runs a single Minecraft console command.
-   Arguments: {{"command": "command_without_leading_slash"}}
-   Example: <CALL name="run_rcon_command">{{"command": "give {player_name} minecraft:cooked_cod 1"}}</CALL>
-   
-3. `search_item_by_name`: Searches mod lang files for display name to ID mappings (use when user asks for modded items!).
+2. `search_item_by_name`: Searches mod lang files for display name to ID mappings (use when user asks for modded items!).
    Arguments: {{"query": "item display name"}}
    Example: <CALL name="search_item_by_name">{{"query": "woodcutter"}}</CALL>
 
-4. `web_search`: Queries the web for real-world information, recipes, item IDs, or general news.
+3. `web_search`: Queries the web for real-world information, recipes, item IDs, or general news.
    Arguments: {{"query": "search term"}}
    Example: <CALL name="web_search">{{"query": "who won the 2026 nba finals"}}</CALL>
 
-5. `list_installed_mods`: Returns a list of all mods (and their versions) currently installed on the server.
+4. `list_installed_mods`: Returns a list of all mods (and their versions) currently installed on the server.
    Arguments: None
    Example: <CALL name="list_installed_mods">{{}}</CALL>
 
-6. `execute_python_code`: Executes arbitrary Python 3 code in a safe subprocess sandbox and returns stdout/stderr. Use this to write complex scripts, parse web pages, run math calculations, query external APIs, or create temporary custom tools.
+5. `execute_python_code`: Executes arbitrary Python 3 code in a safe subprocess sandbox and returns stdout/stderr. Use this to write complex scripts, parse web pages, run math calculations, query external APIs, or create temporary custom tools.
    Arguments: {{"code": "python_code_string"}}
    Example: <CALL name="execute_python_code">{{"code": "import urllib.request\nhtml = urllib.request.urlopen('https://some-api.com').read().decode()\nprint(html)"}}</CALL>
 
-7. `list_directory`: Lists files and subdirectories inside a directory relative to the server folder root.
+6. `list_directory`: Lists files and subdirectories inside a directory relative to the server folder root.
    Arguments: {{"directory": "relative_path_to_directory"}}
    Example: <CALL name="list_directory">{{"directory": "config"}}</CALL>
 
-8. `read_file`: Reads the text contents of a file relative to the server folder root.
+7. `read_file`: Reads the text contents of a file relative to the server folder root.
    Arguments: {{"filepath": "relative_path_to_file"}}
    Example: <CALL name="read_file">{{"filepath": "config/paper.yml"}}</CALL>
 
-9. `set_server_property`: Sets/updates a key-value property inside the Minecraft server's `server.properties` file. Note that a server restart is required for changes to take effect.
+8. `set_server_property`: Sets/updates a key-value property inside the Minecraft server's `server.properties` file. Note that a server restart is required for changes to take effect. WARNING: Do NOT use this tool for in-game state changes (like time, weather, gamemode, health, or items). Use run_rcon_commands for those.
    Arguments: {{"key": "property_name", "value": "property_value"}}
    Example: <CALL name="set_server_property">{{"key": "view-distance", "value": "12"}}</CALL>
 
-10. `get_player_status`: Queries coordinates, dimension, health, hunger, and active status effects of a player.
-    Arguments: {{"player_name": "string"}}
-    Example: <CALL name="get_player_status">{{"player_name": "{player_name}"}}</CALL>
+9. `get_player_status`: Queries coordinates, dimension, health, hunger, and active status effects of a player.
+   Arguments: {{"player_name": "string"}}
+   Example: <CALL name="get_player_status">{{"player_name": "{player_name}"}}</CALL>
 
-11. `inspect_surroundings`: Lists all surrounding entities (mobs, items, players) and their distance (in blocks) from the target player.
+10. `inspect_surroundings`: Lists all surrounding entities (mobs, items, players) and their distance (in blocks) from the target player.
     Arguments: {{"player_name": "string", "radius": 20}}
     Example: <CALL name="inspect_surroundings">{{"player_name": "{player_name}", "radius": 20}}</CALL>
 
-12. `get_server_stats`: Retrieves real-time server stats (Java memory, CPU usage, uptime, player counts, TPS if mod available).
+11. `get_server_stats`: Retrieves real-time server stats (Java memory, CPU usage, uptime, player counts, TPS if mod available).
     Arguments: None
     Example: <CALL name="get_server_stats">{{}}</CALL>
 
-13. `create_world_backup`: Runs save-off, flushes worlds, compresses the 'world' folder into backups/, and re-enables save-on.
+12. `create_world_backup`: Runs save-off, flushes worlds, compresses the 'world' folder into backups/, and re-enables save-on.
     Arguments: None
     Example: <CALL name="create_world_backup">{{}}</CALL>
 
 CRITICAL RULES & PROTOCOLS:
-1. QUERY INTENT & SUBJECT ANALYSIS CHECKLIST:
-   - Before calling any tools, you must analyze the query's intent in your `<THOUGHT>` tags:
-     1. Identify the subject: Is it referring to the player '{player_name}' or other online players ({online_list_str})?
-     2. Identify the goal: Is it player status, surroundings checks, server performance, backups, general questions, or giving items?
-     3. Check exclusions: Never run `search_item_by_name` on usernames, pronouns, conversational keywords, or command syntax terms. Only call it when resolving a specific unrecognized item, block, or entity display name.
-2. AGENTIC EXPLORATION & RESILIENCE:
-   - If a request is ambiguous, query status first! Use `get_player_status` or `inspect_surroundings` to see what is around the player before executing modifications.
-   - If a command fails or returns an error observation, analyze the error output in your thought block, correct your parameters or spelling, and retry the command. Do not give up early.
-3. ITEM/MOB/BLOCK RESOLUTION PROTOCOL:
-   - When a player requests an item, block, or entity, first check the vanilla reference database below.
-   - If the player has already provided the exact modded ID (in `modid:item_name` format, e.g. `gofish:slimefish` or `sophisticatedbackpacks:backpack`), you can use it directly in RCON commands.
-   - If it is NOT in the reference database and the player did NOT provide the exact ID, you MUST call `search_item_by_name` FIRST to find its exact mod ID.
-   - Do NOT run a `web_search` for item IDs unless both the reference database and `search_item_by_name` fail to return results.
-4. When targeting the player, you MUST use their exact username '{player_name}' in console commands instead of selectors like '@p' or '@s'.
-5. Minecraft 1.20.1 uses curly brace NBT syntax (e.g. `minecraft:diamond_sword{{display:{{Name:'{{"text":"Legendary Sword"}}'}}}}`). Square brackets `[]` are 1.21+ components and will CRASH the server.
-6. NEVER put spaces between relative coordinate tildes ('~') and their values (e.g. write '~-4' or '~2', NOT '~ -4' or '~ 2').
-7. Console executes from server center (no position). You MUST prefix all coordinate-dependent commands (like setblock, fill, summon) with `execute at {player_name} run ...` so they execute at the player's location.
-8. NEVER run administrative/destructive commands: stop, op, deop, ban, ban-ip, kick, whitelist.
-9. If you need to perform actions not covered by existing tools (e.g. doing complex calculations, scraping structured web data, calling JSON APIs, or creating custom tools), you can write and execute a custom Python script using the `execute_python_code` tool.
-10. Be extremely brief and concise in your responses. Do NOT append open-ended follow-up questions (such as "How can I assist you further?", "Is there anything else I can do?") when you successfully complete a task. Just state that the task was completed or provide the requested information, and stop.
+1. QUERY INTENT: In <THOUGHT>, identify the subject ({player_name} or others) and the goal (giving items, status, server performance, etc.) before calling any tools. Never call search_item_by_name for usernames or pronouns.
+2. EXPLORATION & RETRIES: If a request is ambiguous, query status/surroundings first. If a command fails, analyze the error in <THOUGHT>, correct your syntax, and try again. Do not give up early.
+3. ID RESOLUTION: When giving/summoning:
+   - Check vanilla reference database. If match found, use it.
+   - If player provided exact modded ID (e.g., 'gofish:slimefish'), use it.
+   - If not found or provided, call search_item_by_name FIRST. Do not run web_search for IDs unless both reference database and search_item_by_name fail.
+4. COMMAND SYNTAX:
+   - Use exact username '{player_name}' instead of selectors like '@p' or '@s'.
+   - Prefix coordinate-dependent commands with 'execute at {player_name} run ...'.
+   - Never put spaces in relative coordinates (e.g. write '~-4' or '~2', NOT '~ -4').
+   - Use curly braces for NBT (e.g. minecraft:sword{{display:{{Name:'{{"text":"Legendary Sword"}}'}}}}). Square brackets `[]` are 1.21+ only and will CRASH the server.
+5. RESTRICTIONS:
+   - NEVER run destructive commands: stop, op, deop, ban, ban-ip, kick, whitelist.
+   - NEVER use set_server_property for in-game time, weather, gamemode, health, or items. Use run_rcon_commands instead.
+6. CONCISENESS: Be extremely brief. Do not append open-ended follow-up questions (e.g., "Is there anything else I can do?"). State completion or facts and stop.
 
 Here is your local Minecraft 1.20.1 database containing exact Item IDs, Entity IDs, Status Effects, and Command Syntax:
 ---
@@ -868,31 +856,44 @@ Your loop structure:
     max_iterations = 5
     loop_count = 0
     final_reply = ""
+    executed_commands = []
     
     while loop_count < max_iterations:
         loop_count += 1
         console.print(f"[bold grey53][*] Iteration {loop_count}/{max_iterations}[/bold grey53]")
         
-        messages = [{"role": "system", "content": system_prompt}] + history
-        
-        try:
-            response = client.chat.completions.create(
-                model=active_model,
-                messages=messages,
-                temperature=0.2,
-                max_tokens=4096,
-                extra_body={"options": {"num_ctx": 65536, "num_predict": 4096}},
-                stream=True
-            )
-            full_resp = []
-            for chunk in response:
-                content = chunk.choices[0].delta.content
-                if content:
-                    full_resp.append(content)
-            ai_output = "".join(full_resp).strip()
-        except Exception as e:
-            console.print(f"[bold red][-] Ollama API error: {e}[/bold red]")
-            final_reply = "I encountered an API error while processing your request."
+        ai_output = ""
+        empty_retry_count = 0
+        while empty_retry_count < 2:
+            messages = [{"role": "system", "content": system_prompt}] + history
+            try:
+                response = client.chat.completions.create(
+                    model=active_model,
+                    messages=messages,
+                    temperature=0.2,
+                    max_tokens=4096,
+                    extra_body={"options": {"num_ctx": 16384, "num_predict": 4096}},
+                    stream=True
+                )
+                full_resp = []
+                for chunk in response:
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        full_resp.append(content)
+                ai_output = "".join(full_resp).strip()
+            except Exception as e:
+                console.print(f"[bold red][-] Ollama API error: {e}[/bold red]")
+                final_reply = "I encountered an API error while processing your request."
+                break
+                
+            if not ai_output:
+                empty_retry_count += 1
+                console.print(f"[bold yellow][*] Empty response from model. Retrying (attempt {empty_retry_count}/2)...[/bold yellow]")
+                history.append({"role": "user", "content": "[System Notice: Your last output was empty. Please state your thought in <THOUGHT> and call a tool or reply using <SAY>.]"})
+            else:
+                break
+                
+        if not ai_output and "API error" in final_reply:
             break
             
         # Parse tags
@@ -921,6 +922,19 @@ Your loop structure:
                 tool_args = {}
                 
             console.print(f"[bold green]Tool Call:[/bold green] {tool_name}({tool_args_str})")
+            
+            # Track executed commands
+            if tool_name == "run_rcon_commands":
+                cmds = tool_args.get("commands", [])
+                if isinstance(cmds, list):
+                    executed_commands.extend(cmds)
+                elif isinstance(cmds, str):
+                    executed_commands.append(cmds)
+            elif tool_name == "run_rcon_command":
+                cmd = tool_args.get("command", "")
+                if cmd:
+                    executed_commands.append(cmd)
+                    
             observation = execute_tool(tool_name, tool_args, player_name)
             console.print(Panel(observation, title="Observation", border_style="blue"))
             
@@ -932,14 +946,21 @@ Your loop structure:
                 idx = ai_output.upper().find("<SAY>")
                 final_reply = ai_output[idx + 5:].strip()
             else:
-                final_reply = ai_output
+                # Strip THOUGHT block and other tags to get only plain text speech
+                speech = re.sub(r"<THOUGHT>.*?</THOUGHT>", "", ai_output, flags=re.DOTALL | re.IGNORECASE).strip()
+                speech = re.sub(r"<[^>]+>.*?</[^>]+>", "", speech, flags=re.DOTALL | re.IGNORECASE).strip()
+                final_reply = speech
                 
             # Strip trailing incomplete tags (e.g. cut off mid-tag)
             final_reply = re.sub(r"<[^>]*$", "", final_reply).strip()
             break
             
     if not final_reply:
-        final_reply = "I completed my actions."
+        if executed_commands:
+            commands_str = ", ".join(executed_commands)
+            final_reply = f"I successfully executed the following command(s): {commands_str}."
+        else:
+            final_reply = "I evaluated your request but did not find any necessary actions to take."
         
     console.print(Panel(final_reply, title="Final Response to Game", border_style="green"))
     
@@ -1134,6 +1155,10 @@ def watch_logs():
             # Decode bytes to string
             line = line_bytes.decode("utf-8", errors="ignore")
             
+            # Skip any logs containing [Rcon] or AgentRCON: to avoid loops
+            if ("[Rcon]" in line or "AgentRCON:" in line) and "<" not in line:
+                continue
+                
             # Print parsed chat lines nicely to console
             player_name = extract_player_name(line)
             if player_name:
