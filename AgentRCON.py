@@ -844,6 +844,20 @@ Your loop structure:
     if player_name not in player_sessions:
         player_sessions[player_name] = []
         
+    # Check if user requests resetting memory/history
+    clean_q = question.lower().strip().replace(".", "").replace("?", "").replace("!", "")
+    if clean_q in ["clear memory", "reset memory", "clear history", "reset history", "forget everything", "forget me"]:
+        player_sessions[player_name] = []
+        save_memories()
+        
+        # Broadcast reply to game
+        try:
+            with MCRcon("127.0.0.1", RCON_PASS, port=RCON_PORT) as mcr:
+                mcr.command(f"say AgentRCON: I have successfully cleared my memory for player '{player_name}'.")
+        except Exception as e:
+            console.print(f"[bold red][-] RCON Broadcast Error: {e}[/bold red]")
+        return
+        
     history = player_sessions[player_name]
     if len(history) > 10:
         history = history[-10:]
@@ -1238,6 +1252,7 @@ def show_help():
     table.add_row("/sleep", "Stop the server and enable auto-wake listening mode.")
     table.add_row("/status", "Display the system telemetry and performance dashboard.")
     table.add_row("/history <player>", "View the AI's conversation history with a specific player.")
+    table.add_row("/clear <player>", "Clear the AI's conversation history with a specific player.")
     table.add_row("/help", "Show this help table.")
     table.add_row("/exit", "Shutdown all background threads and exit AgentRCON.")
     table.add_row("Any raw text", "Passes the command directly to the Minecraft RCON console.")
@@ -1278,6 +1293,18 @@ def cli_input_loop():
                         console.print(f"[bold red][-] No history found for player '{pname}'.[/bold red]")
                 else:
                     console.print("[bold red][-] Usage: /history <player_name>[/bold red]")
+            elif cmd.startswith("/clear"):
+                parts = cmd.split(" ")
+                if len(parts) > 1:
+                    pname = parts[1]
+                    if pname in player_sessions:
+                        player_sessions[pname] = []
+                        save_memories()
+                        console.print(f"[bold green][+] Memory cleared for player '{pname}'.[/bold green]")
+                    else:
+                        console.print(f"[bold red][-] No history found for player '{pname}'.[/bold red]")
+                else:
+                    console.print("[bold red][-] Usage: /clear <player_name>[/bold red]")
             elif cmd == "/exit":
                 console.print("[bold red][*] Shutting down background tasks...[/bold red]")
                 if server_status in ["STARTING", "RUNNING"]:
@@ -1443,6 +1470,17 @@ class AgentRCONAPIHandler(BaseHTTPRequestHandler):
             props = data.get("properties", {})
             success = save_all_server_properties(props)
             resp = {"success": success, "message": "Properties saved successfully." if success else "Failed to save properties."}
+            self.wfile.write(json.dumps(resp).encode("utf-8"))
+        elif self.path == "/api/clear_history":
+            player_name = data.get("player_name", "")
+            if player_name:
+                player_sessions[player_name] = []
+                save_memories()
+                resp = {"success": True, "message": f"Memory cleared for player '{player_name}'."}
+            else:
+                player_sessions.clear()
+                save_memories()
+                resp = {"success": True, "message": "All player memories cleared successfully."}
             self.wfile.write(json.dumps(resp).encode("utf-8"))
         else:
             self.send_response(404)

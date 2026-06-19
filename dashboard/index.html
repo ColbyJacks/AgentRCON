@@ -155,9 +155,12 @@
 
       <!-- Tab: Player Memories -->
       <section id="tab-memories" class="tab-panel">
-        <header class="panel-header">
-          <h2>Player Conversation History</h2>
-          <p>Persistent AI memory logs and session records per player.</p>
+        <header class="panel-header" style="display: flex; justify-content: space-between; align-items: center; gap: 20px;">
+          <div>
+            <h2>Player Conversation History</h2>
+            <p>Persistent AI memory logs and session records per player.</p>
+          </div>
+          <button id="btn-clear-all-memories" class="btn btn-danger btn-small" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none;">Clear All Memories</button>
         </header>
         <div class="memories-container">
           <div class="players-sidebar card">
@@ -167,7 +170,10 @@
             </ul>
           </div>
           <div class="memory-viewer card">
-            <h3>Chat Logs</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+              <h3 style="margin: 0;">Chat Logs</h3>
+              <button id="btn-clear-player-memory" class="btn btn-danger btn-small" style="display: none; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none; font-size: 11px; padding: 4px 10px;">Clear History</button>
+            </div>
             <div id="memory-chat-log" class="memory-chat-log-empty">
               Select a player to load conversation memories.
             </div>

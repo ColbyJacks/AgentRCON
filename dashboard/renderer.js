@@ -27,6 +27,8 @@ const consoleInput = document.getElementById('console-input');
 
 const memoriesPlayersList = document.getElementById('memories-players-list');
 const memoryChatLog = document.getElementById('memory-chat-log');
+const btnClearAllMemories = document.getElementById('btn-clear-all-memories');
+const btnClearPlayerMemory = document.getElementById('btn-clear-player-memory');
 
 const searchInput = document.getElementById('search-query');
 const btnSearch = document.getElementById('btn-search');
@@ -246,6 +248,7 @@ function loadPlayerMemories() {
         memoriesPlayersList.innerHTML = `<li class="players-list-empty">No players saved.</li>`;
         memoryChatLog.className = "memory-chat-log-empty";
         memoryChatLog.textContent = "No persistent players found in memories.";
+        btnClearPlayerMemory.style.display = 'none';
         return;
       }
       
@@ -270,6 +273,8 @@ function loadPlayerMemories() {
       
       if (selectedPlayerMemory && playerMemoriesData[selectedPlayerMemory]) {
         renderPlayerMemory(selectedPlayerMemory);
+      } else {
+        btnClearPlayerMemory.style.display = 'none';
       }
     })
     .catch(err => {
@@ -280,6 +285,7 @@ function loadPlayerMemories() {
 function renderPlayerMemory(player) {
   const history = playerMemoriesData[player] || [];
   memoryChatLog.className = "memory-chat-log";
+  btnClearPlayerMemory.style.display = 'block';
   
   if (history.length === 0) {
     memoryChatLog.innerHTML = `<div class="memory-chat-log-empty">Conversation log is empty.</div>`;
@@ -459,6 +465,29 @@ btnWarmupAi.addEventListener('click', () => {
   window.api.warmupAI()
     .then(r => console.log(r.message))
     .catch(e => console.error(e));
+});
+
+btnClearAllMemories.addEventListener('click', () => {
+  if (confirm("Are you sure you want to clear all player memories? This cannot be undone.")) {
+    window.api.clearHistory()
+      .then(resp => {
+        selectedPlayerMemory = null;
+        loadPlayerMemories();
+      })
+      .catch(err => console.error("Failed to clear all memories:", err));
+  }
+});
+
+btnClearPlayerMemory.addEventListener('click', () => {
+  if (!selectedPlayerMemory) return;
+  if (confirm(`Are you sure you want to clear history for player '${selectedPlayerMemory}'?`)) {
+    window.api.clearHistory(selectedPlayerMemory)
+      .then(resp => {
+        selectedPlayerMemory = null;
+        loadPlayerMemories();
+      })
+      .catch(err => console.error("Failed to clear player memory:", err));
+  }
 });
 
 
